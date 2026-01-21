@@ -278,21 +278,21 @@
         <div class="battle-actions" id="battle-actions">
             <div class="action-btn" onclick="handleAction(0)">
                 <span style="font-size:24px">⚔️</span>
-                <span>攻擊 (檢測)</span>
+                <span>攻擊 (物理)</span>
             </div>
             <div class="action-btn" onclick="handleAction(1)">
                 <span style="font-size:24px">⚡</span>
-                <span>魔法 (優化)</span>
+                <span>咒術 (魔法)</span>
                 <span style="font-size:10px; color:#aaa">MP:10</span>
             </div>
             <div class="action-btn" onclick="handleAction(2)">
-                <span style="font-size:24px">🍷</span>
-                <span>喝藥 (修復)</span>
+                <span style="font-size:24px">🔆</span>
+                <span>回復術 (消耗MP)</span>
                 <span style="font-size:10px; color:#aaa">MP:15</span>
             </div>
             <div class="action-btn" onclick="handleAction(3)">
                 <span style="font-size:24px">🛡️</span>
-                <span>防禦 (安全)</span>
+                <span>防禦 (傷害1/2)</span>
             </div>
         </div>
 
@@ -588,7 +588,7 @@
             else if(idx === 3) { 
                 battleState.isDefending = true;
                 player.mp = Math.min(player.maxMp, player.mp + 15);
-                log(`🛡️ 進入防禦姿態，準備迎接衝擊...`);
+                log(`🛡️ 進入防禦姿態，準備迎接敵方攻擊...`);
             }
 
             updateBattleUI();
@@ -622,7 +622,7 @@
             
             if(isCharged) {
                 zoneCount = 5;
-                document.getElementById('qte-msg').innerText = "💀 毀滅攻擊 (連點攔截!)";
+                document.getElementById('qte-msg').innerText = "💀 強力攻擊，格擋時機!";
                 document.getElementById('qte-msg').style.color = "#e74c3c";
             } else if(battleState.isBossFight) {
                 zoneCount = 3;
@@ -630,7 +630,7 @@
                 document.getElementById('qte-msg').style.color = "white";
             } else {
                 zoneCount = 1;
-                document.getElementById('qte-msg').innerText = "🐺 攻擊來襲!";
+                document.getElementById('qte-msg').innerText = "🐺 攻擊來襲，格擋時機!";
                 document.getElementById('qte-msg').style.color = "white";
             }
 
@@ -703,7 +703,7 @@
             if(success && !skipped) {
                 let reflect = rawDmg * (isCharged ? 4 : 2);
                 enemy.hp -= reflect;
-                log(`✨ 完美反擊！反彈 ${reflect} 傷害！`);
+                log(`✨ 完美格擋！彈反 ${reflect} 傷害！`);
                 shakeFX('enemy');
             } else {
                 let finalDmg = rawDmg;
@@ -712,7 +712,7 @@
                     log(`🛡️ 防禦成功，傷害減半 (${finalDmg})`);
                 } else { 
                     finalDmg = Math.floor(rawDmg * 1.2);
-                    log(`💥 攔截失敗！受到 ${finalDmg} 傷害`);
+                    log(`💥 格擋失敗！受到加倍 ${finalDmg} 傷害`);
                 }
                 player.hp -= finalDmg;
                 shakeFX('player');
@@ -728,7 +728,7 @@
             } else {
                 if(!isCharged && Math.random() < 0.3 && enemy.hp < enemy.maxHp * 0.7) {
                     battleState.chargeTurn = 1;
-                    log(`⚠ ${enemy.name} 正在蓄力... (下回合大招!)`);
+                    log(`⚠ ${enemy.name} 正在蓄力... (下回合連續強力攻擊!)`);
                 }
                 
                 battleState.isProcessing = false;
@@ -777,6 +777,7 @@
     </script>
 </body>
 </html>
+
 
 
 
