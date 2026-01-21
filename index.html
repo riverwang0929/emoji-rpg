@@ -261,8 +261,8 @@
         <!-- 玩家狀態 -->
         <div style="margin-bottom: 10px;">
             <div style="display:flex; justify-content:space-between;">
-                <!-- 修正3: 勇者圖示換成 👱 (年輕人) -->
-                <span>👱 勇者</span>
+                <!-- 修正3: 勇者圖示換成 🦸🏼‍♂️ (年輕人) -->
+                <span>🦸🏼‍♂️ 勇者</span>
                 <span id="player-hp-text-battle">500/500</span>
             </div>
             <div class="hp-bar-box" id="player-bar-box">
@@ -406,7 +406,7 @@
                     el.className = "cell";
                     
                     if(r === player.y && c === player.x) {
-                        el.innerText = "👱"; // 修正3: 地圖上的勇者也換成 👱
+                        el.innerText = "🦸🏼‍♂️"; // 修正3: 地圖上的勇者也換成 🦸🏼‍♂️
                         el.classList.add("player");
                     } else if(type === 1) {
                         el.innerText = "🌲";
@@ -497,7 +497,7 @@
                     atk: 40 + (scale * 10)
                 };
             } else {
-                let sprites = ["🐺", "🧟", "👻", "🦇", "🕷️"];
+                let sprites = ["🐍", "🦚", "🕷", "🦂", "🧞‍♀️", "🧛🏼‍♂️", "🧜🏼‍♂️", "🦚", "👻", "🦇", "🕷️"];
                 return {
                     name: `怪物 LV.${scale}`,
                     sprite: sprites[Math.floor(Math.random()*sprites.length)],
@@ -777,3 +777,4 @@
     </script>
 </body>
 </html>
+
