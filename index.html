@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Emoji 遠征隊：無限之塔</title>
+    <style>
+        /* --- 全局設定 (手遊風格) --- */
+        :root {
+            --bg-color: #2c3e50;
+            --panel-bg: #34495e;
+            --accent: #f1c40f;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --text: #ecf0f1;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            font-family: 'Segoe UI Emoji', 'Apple Color Emoji', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* 禁止網頁捲動 */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* --- 頂部狀態列 --- */
+        .status-header {
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: 2px solid var(--panel-bg);
+        }
+        .stat-badge {
+            background: var(--panel-bg);
+            padding: 4px 8px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* --- 遊戲地圖視窗 --- */
+        #game-viewport {
+            flex: 1;
+            overflow: auto; /* 允許地圖捲動 */
+            background: #1a1a1a;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #grid-container {
+            display: grid;
+            gap: 1px;
+            background: #222;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .cell {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            background: #2c2c2c;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        /* 角色與物件 */
+        .player { background: rgba(52, 152, 219, 0.3); border: 1px solid #3498db; box-shadow: 0 0 10px #3498db;}
+        .wall { background: #4a4a4a; filter: grayscale(100%); opacity: 0.5; }
+        .floor { opacity: 0.1; } /* 空地 */
+        .boss { background: rgba(231, 76, 60, 0.2); animation: pulse 2s infinite; }
+        .chest { animation: float 2s infinite ease-in-out; }
+
+        @keyframes pulse { 0% {transform: scale(1);} 50% {transform: scale(1.1);} 100% {transform: scale(1);} }
+        @keyframes float { 0%, 100% {transform: translateY(0);} 50% {transform: translateY(-3px);} }
+
+        /* --- 底部控制區 (D-Pad) --- */
+        .controls-area {
+            background: var(--panel-bg);
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding-bottom: 20px; /* iPhone Home Bar 避讓 */
+        }
+        .d-pad {
+            display: grid;
+            grid-template-columns: 60px 60px 60px;
+            grid-template-rows: 60px 60px;
+            gap: 10px;
+        }
+        .pad-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 15px;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .pad-btn:active { background: var(--accent); color: black; transform: scale(0.95); }
+        .pad-up { grid-column: 2; grid-row: 1; }
+        .pad-left { grid-column: 1; grid-row: 2; }
+        .pad-down { grid-column: 2; grid-row: 2; }
+        .pad-right { grid-column: 3; grid-row: 2; }
+
+        /* --- 戰鬥視窗 (全螢幕覆蓋) --- */
+        #battle-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 100;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .battle-header { text-align: center; margin-bottom: 20px; }
+        .enemy-sprite { font-size: 80px; margin: 10px 0; animation: float 3s infinite; }
+        
+        /* 血條 */
+        .hp-bar-box { width: 100%; background: #444; height: 20px; border-radius: 10px; overflow: hidden; margin: 5px 0; border: 2px solid #555;}
+        .hp-fill { height: 100%; transition: width 0.3s; }
+        .hp-enemy { background: var(--danger); }
+        .hp-player { background: var(--success); }
+
+        /* 戰鬥選單 (大按鈕) */
+        .battle-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: auto;
+            margin-bottom: 20px;
+        }
+        .action-btn {
+            background: #34495e;
+            border: 2px solid #7f8c8d;
+            padding: 15px;
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .action-btn:active { background: var(--accent); color: black; border-color: white; }
+        .action-btn.disabled { opacity: 0.3; pointer-events: none; }
+
+        /* Log */
+        .battle-log {
+            background: rgba(255,255,255,0.1);
+            height: 80px;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 14px;
+            color: #ddd;
+            margin-top: 10px;
+        }
+
+        /* --- QTE 系統 --- */
+        #qte-overlay {
+            display: none;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 150;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        .qte-track {
+            width: 80%; height: 40px;
+            background: #222;
+            border: 3px solid white;
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+        .qte-bar {
+            width: 6px; height: 100%;
+            background: #00ffff;
+            position: absolute; top: 0; left: 0;
+            box-shadow: 0 0 10px #00ffff;
+            z-index: 10;
+        }
+        .qte-zone {
+            position: absolute; top: 0; height: 100%;
+            background: rgba(231, 76, 60, 0.6);
+            border-left: 2px solid #c0392b;
+            border-right: 2px solid #c0392b;
+        }
+        .qte-zone.hit { background: #2ecc71 !important; border-color: #27ae60; opacity: 1; box-shadow: 0 0 15px #2ecc71; }
+        
+        .qte-msg { font-size: 24px; color: white; margin-bottom: 20px; font-weight: bold; text-shadow: 0 2px 4px black; }
+        .shake-anim { animation: shake-chaos 0.4s; }
+        
+        @keyframes shake-chaos {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-5px, 5px); }
+            40% { transform: translate(5px, -5px); }
+            60% { transform: translate(-5px, -5px); }
+            80% { transform: translate(5px, 5px); }
+            100% { transform: translate(0, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 狀態列 -->
+    <div class="status-header">
+        <div class="stat-badge">🚩 <span id="ui-floor">1F</span></div>
+        <div class="stat-badge">❤️ <span id="ui-hp">500</span></div>
+        <div class="stat-badge">💎 <span id="ui-mp">100</span></div>
+        <div class="stat-badge">⚔️ <span id="ui-atk">20</span></div>
+    </div>
+
+    <!-- 2. 遊戲畫面 (地圖) -->
+    <div id="game-viewport">
+        <div id="grid-container"></div>
+    </div>
+
+    <!-- 3. 控制區 (D-Pad) -->
+    <div class="controls-area" id="map-controls">
+        <div class="d-pad">
+            <div class="pad-btn pad-up" ontouchstart="move(0, -1)" onclick="move(0, -1)">⬆️</div>
+            <div class="pad-btn pad-left" ontouchstart="move(-1, 0)" onclick="move(-1, 0)">⬅️</div>
+            <div class="pad-btn pad-down" ontouchstart="move(0, 1)" onclick="move(0, 1)">⬇️</div>
+            <div class="pad-btn pad-right" ontouchstart="move(1, 0)" onclick="move(1, 0)">➡️</div>
+        </div>
+    </div>
+
+    <!-- 4. 戰鬥介面 (全螢幕) -->
+    <div id="battle-overlay">
+        <div class="battle-header">
+            <h2 id="enemy-name" style="margin:0; color:#f1c40f;">BOSS NAME</h2>
+            <div class="enemy-sprite" id="enemy-sprite">🐉</div>
+            
+            <!-- 敵人血條 -->
+            <div class="hp-bar-box" id="enemy-bar-box">
+                <div id="enemy-hp-bar" class="hp-fill hp-enemy" style="width: 100%;"></div>
+            </div>
+            <div style="font-size:12px; text-align:right;" id="enemy-hp-text">100%</div>
+        </div>
+
+        <!-- 玩家狀態 -->
+        <div style="margin-bottom: 10px;">
+            <div style="display:flex; justify-content:space-between;">
+                <span>🧙‍♂️ 勇者</span>
+                <span id="player-hp-text-battle">500/500</span>
+            </div>
+            <div class="hp-bar-box" id="player-bar-box">
+                <div id="player-hp-bar" class="hp-fill hp-player" style="width: 100%;"></div>
+            </div>
+        </div>
+
+        <div class="battle-log" id="battle-log">
+            戰鬥開始！遭遇了敵人！
+        </div>
+
+        <!-- 戰鬥按鈕 -->
+        <div class="battle-actions" id="battle-actions">
+            <div class="action-btn" onclick="handleAction(0)">
+                <span style="font-size:24px">⚔️</span>
+                <span>攻擊 (檢測)</span>
+            </div>
+            <div class="action-btn" onclick="handleAction(1)">
+                <span style="font-size:24px">⚡</span>
+                <span>魔法 (優化)</span>
+                <span style="font-size:10px; color:#aaa">MP:10</span>
+            </div>
+            <div class="action-btn" onclick="handleAction(2)">
+                <span style="font-size:24px">🍷</span>
+                <span>喝藥 (修復)</span>
+                <span style="font-size:10px; color:#aaa">MP:15</span>
+            </div>
+            <div class="action-btn" onclick="handleAction(3)">
+                <span style="font-size:24px">🛡️</span>
+                <span>防禦 (安全)</span>
+            </div>
+        </div>
+
+        <!-- QTE 覆蓋層 -->
+        <div id="qte-overlay" onmousedown="checkQTE(event)" ontouchstart="checkQTE(event)">
+            <div class="qte-msg" id="qte-msg">⚠ 點擊螢幕攔截!</div>
+            <div class="qte-track">
+                <div id="qte-bar" class="qte-bar"></div>
+                <div id="qte-zones-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 遊戲核心數據 ---
+        const ROWS = 15; // 手機畫面較小，縮減地圖尺寸
+        const COLS = 10;
+        let MAP = [];
+        
+        let player = {
+            x: 1, y: 1,
+            hp: 500, maxHp: 500,
+            mp: 100, maxMp: 100,
+            atk: 20, int: 20, // 物攻/魔攻
+            lvl: 1,
+            floor: 1
+        };
+
+        const ENEMY_TYPES = {
+            PHYSICAL: 0, // 怕魔法
+            MAGICAL: 1   // 怕物理
+        };
+
+        let battleState = {
+            enemy: null,
+            isDefending: false,
+            chargeTurn: 0,
+            isBossFight: false,
+            isProcessing: false
+        };
+
+        let qteState = {
+            active: false,
+            progress: 0,
+            speed: 1.2,
+            zones: [],
+            timer: null
+        };
+
+        // --- 1. 地圖系統 ---
+        function initGame() {
+            generateMap();
+            updateUI();
+        }
+
+        function generateMap() {
+            MAP = [];
+            // 初始化牆壁
+            for(let r=0; r<ROWS; r++) {
+                let row = [];
+                for(let c=0; c<COLS; c++) {
+                    if(r===0 || r===ROWS-1 || c===0 || c===COLS-1) row.push(1);
+                    else if(Math.random() < 0.25) row.push(1); 
+                    else row.push(0);
+                }
+                MAP.push(row);
+            }
+            // 確保起點
+            player.x = 1; player.y = 1;
+            MAP[1][1] = 0; MAP[1][2] = 0; MAP[2][1] = 0;
+
+            // BFS 找最遠點
+            let distMap = bfs(1, 1);
+            let validSpots = [];
+            let maxDist = 0;
+            
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    if(distMap[r][c] !== -1) {
+                        if(MAP[r][c] === 0 && !(r===1 && c===1)) validSpots.push({r,c});
+                        if(distMap[r][c] > maxDist) maxDist = distMap[r][c];
+                    }
+                }
+            }
+
+            // 防呆重生成
+            if(maxDist < 8) { generateMap(); return; }
+
+            // 放置魔王 (從最遠點選)
+            let farSpots = validSpots.filter(p => distMap[p.r][p.c] >= maxDist - 2);
+            let bossPos = farSpots[Math.floor(Math.random() * farSpots.length)];
+            MAP[bossPos.r][bossPos.c] = 9; // 9 = Boss
+
+            // 放置補給 (隨層數遞減)
+            let healCount = Math.max(1, 4 - Math.floor((player.floor-1)/3));
+            let lootSpots = validSpots.filter(p => !(p.r===bossPos.r && p.c===bossPos.c));
+            lootSpots.sort(() => Math.random() - 0.5);
+            
+            for(let i=0; i<Math.min(healCount, lootSpots.length); i++) {
+                MAP[lootSpots[i].r][lootSpots[i].c] = 3; // 3 = Loot
+            }
+
+            renderMap();
+        }
+
+        function bfs(sx, sy) {
+            let dist = Array(ROWS).fill().map(()=>Array(COLS).fill(-1));
+            let q = [{r:sy, c:sx, d:0}];
+            dist[sy][sx] = 0;
+            while(q.length > 0) {
+                let curr = q.shift();
+                [[0,1],[0,-1],[1,0],[-1,0]].forEach(dir => {
+                    let nr = curr.r + dir[0], nc = curr.c + dir[1];
+                    if(nr>=0 && nr<ROWS && nc>=0 && nc<COLS && MAP[nr][nc]!==1 && dist[nr][nc]===-1) {
+                        dist[nr][nc] = curr.d + 1;
+                        q.push({r:nr, c:nc, d:curr.d+1});
+                    }
+                });
+            }
+            return dist;
+        }
+
+        function renderMap() {
+            const container = document.getElementById('grid-container');
+            container.style.gridTemplateColumns = `repeat(${COLS}, 35px)`;
+            container.innerHTML = "";
+            
+            for(let r=0; r<ROWS; r++) {
+                for(let c=0; c<COLS; c++) {
+                    let type = MAP[r][c];
+                    let el = document.createElement('div');
+                    el.className = "cell";
+                    
+                    if(r === player.y && c === player.x) {
+                        el.innerText = "🧙‍♂️";
+                        el.classList.add("player");
+                    } else if(type === 1) {
+                        el.innerText = "🌲";
+                        el.classList.add("wall");
+                    } else if(type === 3) {
+                        el.innerText = "🍷";
+                        el.classList.add("chest");
+                    } else if(type === 9) {
+                        el.innerText = "👹";
+                        el.classList.add("boss");
+                    } else {
+                        el.classList.add("floor");
+                    }
+                    
+                    // 點擊移動支援
+                    el.onclick = () => {
+                        let dx = c - player.x;
+                        let dy = r - player.y;
+                        if(Math.abs(dx) + Math.abs(dy) === 1) move(dx, dy);
+                    };
+                    
+                    container.appendChild(el);
+                }
+            }
+            // 自動捲動到主角位置
+            // (簡單實作：目前地圖不大，可以不用特別做)
+        }
+
+        function move(dx, dy) {
+            let nx = player.x + dx;
+            let ny = player.y + dy;
+            
+            if(nx<0 || nx>=COLS || ny<0 || ny>=ROWS) return;
+            let tile = MAP[ny][nx];
+            if(tile === 1) return; // 撞牆
+
+            player.x = nx; player.y = ny;
+            renderMap();
+
+            if(tile === 3) {
+                player.hp = player.maxHp;
+                player.mp = player.maxMp;
+                alert("🍷 喝下美酒，體力全滿！");
+                MAP[ny][nx] = 0; renderMap();
+                updateUI();
+            } else if(tile === 9) {
+                startBattle(true);
+            } else if(Math.random() < 0.08) {
+                startBattle(false);
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('ui-floor').innerText = player.floor + "F";
+            document.getElementById('ui-hp').innerText = player.hp;
+            document.getElementById('ui-mp').innerText = player.mp;
+            document.getElementById('ui-atk').innerText = player.atk;
+        }
+
+        // --- 2. 戰鬥系統 ---
+        function startBattle(isBoss) {
+            document.getElementById('battle-overlay').style.display = 'flex';
+            document.getElementById('map-controls').style.display = 'none';
+            
+            battleState = {
+                isBossFight: isBoss,
+                chargeTurn: 0,
+                isDefending: false,
+                isProcessing: false,
+                enemy: generateEnemy(isBoss)
+            };
+            
+            updateBattleUI();
+            log(`遭遇 ${battleState.enemy.name}！`);
+        }
+
+        function generateEnemy(isBoss) {
+            let scale = player.floor;
+            let type = Math.random() < 0.5 ? ENEMY_TYPES.PHYSICAL : ENEMY_TYPES.MAGICAL;
+            
+            if(isBoss) {
+                return {
+                    name: `魔王龍 LV.${scale}`,
+                    sprite: "🐉",
+                    type: ENEMY_TYPES.MAGICAL, // 龍通常怕物理? 這裡設定怕物理
+                    hp: 600 + (scale * 200),
+                    maxHp: 600 + (scale * 200),
+                    atk: 40 + (scale * 10)
+                };
+            } else {
+                let sprites = ["🐺", "🧟", "👻", "🦇", "🕷️"];
+                return {
+                    name: `怪物 LV.${scale}`,
+                    sprite: sprites[Math.floor(Math.random()*sprites.length)],
+                    type: type,
+                    hp: 80 + (scale * 30),
+                    maxHp: 80 + (scale * 30),
+                    atk: 15 + (scale * 5)
+                };
+            }
+        }
+
+        function updateBattleUI() {
+            let enemy = battleState.enemy;
+            document.getElementById('enemy-name').innerText = enemy.name;
+            document.getElementById('enemy-sprite').innerText = enemy.sprite;
+            
+            // 血條
+            let ePct = Math.max(0, (enemy.hp / enemy.maxHp) * 100);
+            document.getElementById('enemy-hp-bar').style.width = ePct + "%";
+            document.getElementById('enemy-hp-text').innerText = Math.floor(ePct) + "%";
+            
+            let pPct = Math.max(0, (player.hp / player.maxHp) * 100);
+            document.getElementById('player-hp-bar').style.width = pPct + "%";
+            document.getElementById('player-hp-text-battle').innerText = `${player.hp}/${player.maxHp}`;
+            
+            // 按鈕狀態
+            let btns = document.querySelectorAll('.action-btn');
+            btns.forEach(btn => {
+                if(battleState.isProcessing) btn.classList.add('disabled');
+                else btn.classList.remove('disabled');
+            });
+        }
+
+        function log(msg) {
+            let box = document.getElementById('battle-log');
+            box.innerHTML += `<div>${msg}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function handleAction(idx) {
+            if(battleState.isProcessing) return;
+            battleState.isProcessing = true;
+            updateBattleUI();
+
+            let enemy = battleState.enemy;
+            battleState.isDefending = false;
+            let dmg = 0;
+
+            if(idx === 0) { // 物理
+                dmg = Math.floor(player.atk * (Math.random()*0.4 + 0.8));
+                if(enemy.type === ENEMY_TYPES.MAGICAL) {
+                    dmg = Math.floor(dmg * 1.5);
+                    log(`⚔️ 物理重擊！造成 ${dmg} 傷害 (效果拔群)`);
+                } else {
+                    dmg = Math.floor(dmg * 0.5);
+                    log(`⚔️ 物理攻擊... 造成 ${dmg} 傷害 (被抵抗)`);
+                }
+                enemy.hp -= dmg;
+                shakeFX('enemy');
+            } 
+            else if(idx === 1) { // 魔法
+                if(player.mp >= 10) {
+                    player.mp -= 10;
+                    dmg = Math.floor(player.int * 2.5); // 魔法倍率高
+                    if(enemy.type === ENEMY_TYPES.PHYSICAL) {
+                        dmg = Math.floor(dmg * 1.5);
+                        log(`⚡ 魔法轟炸！造成 ${dmg} 傷害 (效果拔群)`);
+                    } else {
+                        dmg = Math.floor(dmg * 0.5);
+                        log(`⚡ 魔法攻擊... 造成 ${dmg} 傷害 (被抵抗)`);
+                    }
+                    enemy.hp -= dmg;
+                    shakeFX('enemy');
+                } else {
+                    log("❌ MP 不足！");
+                    battleState.isProcessing = false; updateBattleUI(); return;
+                }
+            }
+            else if(idx === 2) { // 治療
+                if(player.mp >= 15) {
+                    player.mp -= 15;
+                    let heal = 150;
+                    player.hp = Math.min(player.maxHp, player.hp + heal);
+                    log(`🍷 喝下藥水，恢復 ${heal} HP`);
+                } else {
+                    log("❌ MP 不足！");
+                    battleState.isProcessing = false; updateBattleUI(); return;
+                }
+            }
+            else if(idx === 3) { // 防禦
+                battleState.isDefending = true;
+                player.mp = Math.min(player.maxMp, player.mp + 15);
+                log(`🛡️ 進入防禦姿態，準備迎接衝擊...`);
+            }
+
+            updateBattleUI();
+            updateUI(); // 更新上面那一條
+
+            if(enemy.hp <= 0) {
+                setTimeout(winBattle, 500);
+            } else {
+                // 如果防禦中，直接結算傷害 (不進入 QTE)
+                if(battleState.isDefending) {
+                    setTimeout(() => resolveEnemyTurn(false, true), 600);
+                } else {
+                    setTimeout(startQTE, 600);
+                }
+            }
+        }
+
+        // --- 3. QTE 系統 (觸控優化) ---
+        function startQTE() {
+            document.getElementById('qte-overlay').style.display = 'flex';
+            let track = document.getElementById('qte-zones-container');
+            track.innerHTML = ""; // 清空舊的
+
+            qteState.active = true;
+            qteState.progress = 0;
+            qteState.speed = (1.2 + (player.floor * 0.05)) * 1.2; 
+            qteState.zones = [];
+
+            // 決定難度
+            let zoneCount = 1;
+            let isCharged = battleState.chargeTurn > 0;
+            
+            if(isCharged) {
+                zoneCount = 5;
+                document.getElementById('qte-msg').innerText = "💀 毀滅攻擊 (連點攔截!)";
+                document.getElementById('qte-msg').style.color = "#e74c3c";
+            } else if(battleState.isBossFight) {
+                zoneCount = 3;
+                document.getElementById('qte-msg').innerText = "👹 連續攻擊來襲!";
+                document.getElementById('qte-msg').style.color = "white";
+            } else {
+                zoneCount = 1;
+                document.getElementById('qte-msg').innerText = "🐺 攻擊來襲!";
+                document.getElementById('qte-msg').style.color = "white";
+            }
+
+            // 生成判定區
+            let lastEnd = 10;
+            for(let i=0; i<zoneCount; i++) {
+                let width = 12; 
+                let gap = 8;
+                let start = lastEnd + Math.random() * gap + 5;
+                if(start + width > 95) break;
+                
+                let end = start + width;
+                let el = document.createElement('div');
+                el.className = 'qte-zone';
+                el.style.left = start + "%";
+                el.style.width = width + "%";
+                el.id = `zone-${i}`;
+                track.appendChild(el);
+                
+                qteState.zones.push({start, end, hit: false, id: `zone-${i}`});
+                lastEnd = end;
+            }
+
+            if(qteState.timer) clearInterval(qteState.timer);
+            qteState.timer = setInterval(qteLoop, 16);
+        }
+
+        function qteLoop() {
+            if(!qteState.active) return;
+            qteState.progress += qteState.speed;
+            document.getElementById('qte-bar').style.left = qteState.progress + "%"; // 修正為 left 移動
+
+            if(qteState.progress >= 100) {
+                let allHit = qteState.zones.every(z => z.hit);
+                endQTE(allHit);
+            }
+        }
+
+        function checkQTE(e) {
+            e.preventDefault(); // 防止連點放大
+            if(!qteState.active) return;
+
+            // 檢查是否有命中
+            for(let z of qteState.zones) {
+                if(!z.hit && qteState.progress >= z.start && qteState.progress <= z.end) {
+                    z.hit = true;
+                    document.getElementById(z.id).classList.add('hit');
+                    return; // 一次點擊只算一個
+                }
+            }
+        }
+
+        function endQTE(success) {
+            qteState.active = false;
+            clearInterval(qteState.timer);
+            setTimeout(() => {
+                document.getElementById('qte-overlay').style.display = 'none';
+                resolveEnemyTurn(success, false);
+            }, 300);
+        }
+
+        function resolveEnemyTurn(success, skipped) {
+            let enemy = battleState.enemy;
+            let isCharged = battleState.chargeTurn > 0;
+            let rawDmg = Math.max(1, enemy.atk - Math.floor(player.lvl * 2));
+            
+            if(isCharged) {
+                rawDmg *= 3;
+                battleState.chargeTurn--;
+            }
+
+            if(success && !skipped) {
+                // 反擊成功
+                let reflect = rawDmg * (isCharged ? 4 : 2);
+                enemy.hp -= reflect;
+                log(`✨ 完美反擊！反彈 ${reflect} 傷害！`);
+                shakeFX('enemy');
+            } else {
+                // 失敗或防禦
+                let finalDmg = rawDmg;
+                if(skipped) { // 防禦
+                    finalDmg = Math.floor(rawDmg * 0.5);
+                    log(`🛡️ 防禦成功，傷害減半 (${finalDmg})`);
+                } else { // 失敗
+                    finalDmg = Math.floor(rawDmg * 1.2);
+                    log(`💥 攔截失敗！受到 ${finalDmg} 傷害`);
+                }
+                player.hp -= finalDmg;
+                shakeFX('player');
+            }
+
+            updateBattleUI();
+            updateUI();
+
+            // 檢查勝負
+            if(enemy.hp <= 0) {
+                setTimeout(winBattle, 500);
+            } else if(player.hp <= 0) {
+                setTimeout(respawn, 1000);
+            } else {
+                // 檢查蓄力預告
+                if(!isCharged && Math.random() < 0.3 && enemy.hp < enemy.maxHp * 0.7) {
+                    battleState.chargeTurn = 1;
+                    log(`⚠ ${enemy.name} 正在蓄力... (下回合大招!)`);
+                }
+                
+                battleState.isProcessing = false;
+                updateBattleUI();
+            }
+        }
+
+        // --- 結算系統 ---
+        function winBattle() {
+            document.getElementById('battle-overlay').style.display = 'none';
+            document.getElementById('map-controls').style.display = 'flex';
+            
+            if(battleState.isBossFight) {
+                player.floor++;
+                player.lvl++;
+                player.maxHp += 100;
+                player.hp = player.maxHp;
+                player.atk += 10;
+                player.int += 10;
+                alert(`🎉 討伐成功！前往第 ${player.floor} 層！(能力提升)`);
+                generateMap();
+            } else {
+                log("戰鬥勝利！");
+                player.hp = Math.min(player.maxHp, player.hp + 20); // 小回血
+            }
+            updateUI();
+        }
+
+        function respawn() {
+            alert("💀 你被打倒了... (在當前樓層復活)");
+            player.hp = player.maxHp;
+            player.mp = player.maxMp;
+            document.getElementById('battle-overlay').style.display = 'none';
+            document.getElementById('map-controls').style.display = 'flex';
+            generateMap(); // 重置地圖防止卡死
+            updateUI();
+        }
+
+        // 視覺震動
+        function shakeFX(target) {
+            let el = target === 'enemy' ? document.getElementById('battle-overlay') : document.getElementById('game-viewport');
+            el.classList.add('shake-anim');
+            setTimeout(() => el.classList.remove('shake-anim'), 400);
+        }
+
+        // 啟動
+        initGame();
+
+    </script>
+</body>
+</html>
